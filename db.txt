@@ -1,0 +1,186 @@
+-- Roles Table
+CREATE TABLE roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE -- 'Admin', 'Teacher', 'Student', 'Accountant'
+);
+
+-- Users Table (Central Credentials)
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(15) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role_id INT NOT NULL,
+    status ENUM('active', 'inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES roles(id)
+);
+-- Classes/Grades (e.g., Class 10, HSC 1st Year)
+CREATE TABLE classes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_name VARCHAR(50) NOT NULL
+);
+
+-- Subjects
+CREATE TABLE subjects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_id INT NOT NULL,
+    subject_code VARCHAR(20),
+    subject_name VARCHAR(100) NOT NULL,
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+);
+
+-- Batches (e.g., Morning Batch A, Evening Batch B)
+CREATE TABLE batches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    class_id INT NOT NULL,
+    batch_name VARCHAR(50) NOT NULL,
+    max_capacity INT DEFAULT 40,
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+);
+
+-- Subject-wise Routine Date / Weekly Schedule
+CREATE TABLE class_routines (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    batch_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    teacher_id INT NOT NULL,
+    day_of_week ENUM('Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday') NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    room_number VARCHAR(20),
+    FOREIGN KEY (batch_id) REFERENCES batches(id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id)
+);
+
+-- Teachers Profile
+CREATE TABLE teachers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNIQUE NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    designation VARCHAR(50),
+    salary_type ENUM('monthly', 'per_class') DEFAULT 'monthly',
+    base_salary DECIMAL(10,2) DEFAULT 0.00,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Student Information
+CREATE TABLE students (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNIQUE NOT NULL,
+    student_id_no VARCHAR(20) NOT NULL UNIQUE, -- e.g., CC-2026-001
+    full_name VARCHAR(100) NOT NULL,
+    guardian_name VARCHAR(100) NOT NULL,
+    guardian_phone VARCHAR(15) NOT NULL,
+    class_id INT NOT NULL,
+    batch_id INT NOT NULL,
+    admission_date DATE NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (batch_id) REFERENCES batches(id)
+);
+-- Fee Types (Admission, Monthly Tuition, Model Test Fee)
+CREATE TABLE fee_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    default_amount DECIMAL(10,2) NOT NULL
+);
+
+-- Individual Student Invoices / Dues
+CREATE TABLE student_fees (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    student_id INT NOT NULL,
+    fee_type_id INT NOT NULL,
+    billing_month_year VARCHAR(7) NOT NULL, -- e.g., '2026-07'
+    amount DECIMAL(10,2) NOT NULL,
+    discount DECIMAL(10,2) DEFAULT 0.00,
+    due_date DATE,
+    status ENUM('unpaid', 'partially_paid', 'paid') DEFAULT 'unpaid',
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (fee_type_id) REFERENCES fee_types(id)
+);
+
+-- Payment Collections
+CREATE TABLE payment_collections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    invoice_no VARCHAR(30) UNIQUE NOT NULL,
+    student_fee_id INT NOT NULL,
+    paid_amount DECIMAL(10,2) NOT NULL,
+    payment_method ENUM('cash', 'bkash', 'nagad', 'bank') DEFAULT 'cash',
+    transaction_ref VARCHAR(100),
+    collected_by_user_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_fee_id) REFERENCES student_fees(id),
+    FOREIGN KEY (collected_by_user_id) REFERENCES users(id)
+);
+
+-- Accounts Ledger (General Income & Expenses)
+CREATE TABLE account_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    transaction_type ENUM('income', 'expense') NOT NULL,
+    category VARCHAR(100) NOT NULL, -- Rent, Electricity, Teacher Salary, Tuition Collection
+    amount DECIMAL(10,2) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Main Exams (e.g., Weekly Test 1, Term Exam 2026)
+CREATE TABLE exams (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    class_id INT NOT NULL,
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+);
+
+-- Subject-Wise Exam Dates & Marks Setup
+CREATE TABLE exam_schedules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    exam_id INT NOT NULL,
+    subject_id INT NOT NULL,
+    batch_id INT NOT NULL,
+    exam_date DATE NOT NULL,
+    start_time TIME,
+    total_marks DECIMAL(5,2) NOT NULL,
+    pass_marks DECIMAL(5,2) NOT NULL,
+    FOREIGN KEY (exam_id) REFERENCES exams(id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(id),
+    FOREIGN KEY (batch_id) REFERENCES batches(id)
+);
+
+-- Marks Sheet Creation
+CREATE TABLE mark_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    exam_schedule_id INT NOT NULL,
+    student_id INT NOT NULL,
+    obtained_marks DECIMAL(5,2) NOT NULL,
+    is_absent TINYINT(1) DEFAULT 0,
+    remarks VARCHAR(255),
+    FOREIGN KEY (exam_schedule_id) REFERENCES exam_schedules(id),
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+-- Consolidated Result Sheet
+CREATE TABLE result_sheets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    exam_id INT NOT NULL,
+    student_id INT NOT NULL,
+    total_obtained DECIMAL(6,2) NOT NULL,
+    gpa DECIMAL(3,2),
+    grade VARCHAR(5),
+    position_in_batch INT,
+    is_published TINYINT(1) DEFAULT 0,
+    published_at TIMESTAMP NULL,
+    FOREIGN KEY (exam_id) REFERENCES exams(id),
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+-- SMS Log (Track SMS sent to guardians/students)
+CREATE TABLE sms_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    recipient_phone VARCHAR(15) NOT NULL,
+    message TEXT NOT NULL,
+    type ENUM('result', 'payment_receipt', 'fee_reminder', 'notice') NOT NULL,
+    status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
